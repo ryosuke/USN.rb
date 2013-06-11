@@ -35,6 +35,10 @@ class USN
     return @usn_title
   end
 
+  def getURL
+    return "#{@usnbase}/usn-#{@usn_num}/"
+  end
+
   def getDate
     return @usn_date
   end
@@ -54,6 +58,10 @@ class USN
   def getReferencesWithURL
     text0 = @usn_references.gsub!(/(CVE-[0-9]+-[0-9]+)/, "<a href=\"#{@cvebase}" + '\1' + "\">" + '\1' + "</a>")
     return text0
+  end
+
+  def getUSNTargets
+    return @usn_targets
   end
 
   private
@@ -76,9 +84,13 @@ class USN
     doc = Nokogiri::HTML(open(@tmpfile))
     @usn_date = doc.xpath('//p/em')[0].text
 
+    @usn_summary = ''
+    @usn_details = ''
+    @usn_references = ''
+    @usn_targets = ''
+
     tag_h3 = Array.new()
     doc.xpath('//h3').each do |c|
-      p c.text
       tag_h3 << c
     end
     @usn_title = tag_h3[0].text
@@ -87,18 +99,45 @@ class USN
     doc.xpath('//p').each do |c|
       tag_p << c
     end
-    @usn_summary = tag_p[2].text
-    @usn_details = tag_p[3].text
-    @usn_references = tag_p[7].text
+    i = 0;
+    detailf = false
+    tag_p.each do |p|
+      if i == 2
+        @usn_summary = p.text
+      end
+      if i == 3
+        detailf = true
+      end
+      if p.text =~ /^To update your system/ || p.text =~ /^ The problem can be corrected/
+        detailf = false
+      end
+      if detailf
+        @usn_details.concat("\n\n" + p.text)
+      end
+      if p.to_s =~ /^[\s,\t]*<a href=/
+        unless p.text =~ /^To update your system/ 
+          @usn_references.concat(p.text.gsub(/[\n\s]/, ''))
+        end
+      end
+      i += 1
+    end
+
+    @usn_targets = Array.new()
+    doc.xpath('//ul/li').each do |c|
+      if c.text =~ /^Ubuntu [0-9.]+/
+        @usn_targets << c.text
+      end
+    end
   end
 end
 
 ### main ###
 if __FILE__ == $0
-  usn = USN.new("1859-1")
+  usn = USN.new("1849-1")
   print "Title      : #{usn.getTitle}\n"
   print "Date       : #{usn.getDate}\n"
   print "Summary    : #{usn.getSummary}\n"
+  print "Details    : #{usn.getDetails}\n"
   print "References : #{usn.getReferences}\n"
   print "References(a) : #{usn.getReferencesWithURL}\n"
 end
